@@ -1,6 +1,6 @@
 Require Import List.
-Require Import Omega.
-Require Import SetoidClass.
+Require Import Arith Omega.
+
 
 Set Implicit Arguments.
 
@@ -126,413 +126,239 @@ Ltac cut_hyp H :=
   refine ((fun p pq => pq (H p)) _ _); clear H; [| intro H].
 
 
-Section NDL.
-  Variable A : Type.
-  Context `{DA : Decidable A}.
 
-  Record NDL :=
-    {
-      elems :> list A;
-      nodup : NoDup elems
-    }.
-  Hint Resolve nodup.
+Fixpoint nat_sum xs :=
+  match xs with
+  | nil => 0
+  | x :: xs' => x + nat_sum xs'
+  end.
 
-  Definition nd_In x (xs: NDL) := In x (elems xs).
-  Lemma nd_In_In : forall x xs, nd_In x xs <-> In x xs.
-  Proof.
-    intros.
-    reflexivity.
-  Qed.
-  
-  Definition same_set (xs ys : NDL) : Prop := forall x,
-      nd_In x xs <-> nd_In x ys.
+Lemma nat_sum_app : forall xs ys, nat_sum (xs ++ ys) = nat_sum xs + nat_sum ys.
+Proof.
+  intros.
+  induction xs; simpl; auto.
+  omega.
+Qed.
 
 
-  Global Program Instance NDL_Setoid : Setoid NDL := {| equiv := same_set |}.
-  Next Obligation.
-    constructor; autounfold; unfold same_set.
-    - reflexivity.
-    - intros xs ys H.
-      intro x.
-      now symmetry.
-    - intros xs ys zs.
-      intros Hxy Hyz.
-      intro x.
-      now rewrite Hxy.
-  Qed.
+Lemma nat_sum_in : forall xs x ys, nat_sum (xs ++ x :: ys) = x + nat_sum xs + nat_sum ys.
+Proof.
+  intros.
+  rewrite nat_sum_app.
+  simpl.
+  omega.
+Qed.
+
+Lemma nat_sum_rev : forall xs, nat_sum (rev xs) = nat_sum xs.
+Proof.
+  intros.
+  induction xs; simpl; auto.
+  rewrite nat_sum_in; simpl.
+  omega.
+Qed.
 
 
-  Global Instance nd_in_proper :
-    Proper (eq ==> equiv  ==> equiv) nd_In.
-  Proof.
-    simpl.
-    intros x x' Heqx xs xs' Heqxs'.
-    unfold same_set in *.
-    subst.
-    unfold nd_In in *.
-    rewrite Heqxs'.
-    reflexivity.
-  Qed.
-  
-  Definition nd_included (xs ys : NDL) : Prop :=
-    forall x, nd_In x xs -> nd_In x ys.
 
-  Global Instance nd_included_proper :
-    Proper (equiv ==> equiv ==> equiv) nd_included.
-  Proof.
-    simpl.
-    intros xs xs' Heqxs ys ys' Heqys.
-    unfold nd_included.
-    intuition.
-    - specialize (H x).
-      rewrite Heqxs, Heqys in H.
+Lemma map_sum_add {A} : forall (f g : A -> nat) xs,
+    nat_sum (map (fun x => f x + g x) xs) = nat_sum (map f xs) + nat_sum (map g xs).
+Proof.
+  intros.
+  induction xs; simpl; auto.
+  rewrite IHxs.
+  omega.
+Qed.
+
+Lemma map_sum_sub {A} : forall (f g : A -> nat) xs,
+    (forall x, In x xs -> g x <= f x) ->
+    nat_sum (map (fun x => f x - g x) xs) = nat_sum (map f xs) - nat_sum (map g xs).
+Proof.
+  intros f g.
+  induction xs; intro Hle; simpl; auto.
+  rewrite IHxs.
+  - rewrite Nat.sub_add_distr.
+    rewrite Nat.add_sub_swap.
+    + rewrite Nat.add_sub_assoc; auto.
+      cut (forall x,In x xs -> g x <= f x); try solve [intuition].
+      clear.
+      induction xs; simpl; auto.
+      intro H.
+      apply le_trans with (f a + nat_sum (map g xs)).
+      * apply Nat.add_le_mono_r.
+        intuition.
+      * apply Nat.add_le_mono_l.
+        apply IHxs.
+        intuition.
+    + apply Hle.
+      simpl.
       auto.
-    - specialize (H x).
-      rewrite <- Heqxs, <- Heqys in H.
-      auto.
-  Qed.
-  
-  Definition NDL_iff (P : A -> Prop) (xs : NDL) := forall x, nd_In x xs <-> P x.
-
-  Definition count (xs : NDL) : nat := length (elems xs).
-  Lemma nd_count_length : forall xs, count xs = length xs.
-  Proof.
-    reflexivity.
-  Qed.
-
-  Global Instance count_proper : Proper (equiv ==> eq) count.
-  Proof.
+  - intros x HIn.
+    apply Hle.
     simpl.
-    intros [xs NDxs] [ys NDys].
-    unfold count.
-    unfold same_set.
-    unfold nd_In.
-    simpl.
-    revert ys NDys.
-    induction NDxs.
-    - intros.
-      destruct ys; auto.
-      specialize (H a).
-      simpl in H.
-      tauto.
-    - intros ys Hys HIn.
-      simpl in *.
-      assert (In x ys) as HInx. {
-        rewrite <- HIn.
-        auto.
-      }
-      apply in_split in HInx.
-      destruct HInx as (yl & yr & Heqys). subst.
-      simpl.
-      specialize (IHNDxs (yl ++ yr)).
-      rewrite app_length in *.
-      simpl.
-      rewrite IHNDxs; auto.
-      + apply NoDup_remove in Hys.
-        tauto.
-      + intro y.
-        specialize (HIn y).
-        split; intro HIny.
-        * intuition; subst; try tauto.
-          rewrite in_app_iff in *.
-          simpl in *.
-          intuition.
-          now subst.
-        * assert (x <> y) as HNe. {
-            intro.
-            subst.
-            now apply NoDup_remove in Hys.
-          }
-          rewrite in_app_iff in *.
-          simpl in *.
-          tauto.
-  Qed.
+    auto.
+Qed.
 
-  Program Definition nd_add (x : A) (xs : NDL) : NDL :=
-    if In_dec x xs
-    then xs
-    else {| elems := cons x xs |}.
-  Next Obligation.
-    now constructor.
-  Qed.
+Lemma map_sum_mul_distr {A} : forall (f : A -> nat) xs a,
+    nat_sum (map f xs) * a = nat_sum (map (fun x => f x * a) xs).
+Proof.
+  intros f xs a.
+  induction xs as [| x xs]; simpl; auto.
+  rewrite <- IHxs.
+  ring.
+Qed.
 
-  Lemma nodup_app :
-    forall (xs ys : list A),
-      NoDup xs -> NoDup ys -> (forall x, In x xs -> ~In x ys) ->
-      NoDup (xs ++ ys).
-  Proof.
-      intros xs ys Hxs Hys Hnin.
-      induction xs.
-      - now simpl.
-      - simpl.
-        constructor.
-        + rewrite in_app_iff.
-          intros [HInx | HIny].
-          * now inversion Hxs.
-          * apply (Hnin a); simpl; auto.
-        + apply IHxs.
-          * now inversion Hxs.
-          * intros x HInx.
-            apply Hnin.
-            simpl. auto.
-  Qed.
-  Hint Resolve nodup_app.
-
-  Lemma nd_add_in : forall x xs a, nd_In a (nd_add x xs) <-> x = a \/ nd_In a xs.
-  Proof.
-    intros.
-    unfold nd_add.
-    destruct In_dec.
-    - intuition. subst. auto.
-    - simpl.
-      reflexivity.
-  Qed.
-
-  Global Instance nd_add_proper : Proper (eq ==> equiv ==> equiv) nd_add.
-  Proof.
-    simpl.
-    intros x y Hxy xs ys Heqv.
-    subst.
-    unfold same_set in *.
-    intro z.
-    repeat rewrite nd_add_in.
-    rewrite Heqv.
-    reflexivity.
-  Qed.
-    
-  Lemma nodup_filter : forall f (xs : list A), NoDup xs -> NoDup (filter f xs).
-  Proof.
-    intros f xs H.
-    induction xs; simpl; auto.
-    inversion H. subst. intuition.
-    destruct (f a); simpl; auto.
-    constructor; auto.
-    rewrite filter_In.
-    tauto.
-  Qed.
-  Hint Resolve nodup_filter.
-
-  Lemma filter_length : forall f (xs : list A), length (filter f xs) <= length xs.
-  Proof.
-    intros.
-    induction xs; simpl; auto.
-    destruct (f a); simpl; auto.
-    omega.
-  Qed.
-
-  Program Definition nd_filter (f : A -> bool) (xs : NDL) : NDL :=
-    {| elems := filter f xs |}.
-  Lemma nd_filter_in : forall f xs x,
-      nd_In x (nd_filter f xs) <-> nd_In x xs /\ f x = true.
-  Proof.
-    intros.
-    unfold nd_In, nd_filter.
-    simpl.
-    apply filter_In.
-  Qed.
-
-  Global Instance nd_filter_propre : Proper (eq ==> equiv ==> equiv) nd_filter.
-  Proof.
-    simpl.
-    intros f f' Heqf xs xs' Heqxs.
-    subst.
-    intro x.
-    repeat rewrite nd_filter_in.
-    rewrite Heqxs.
-    reflexivity.
-  Qed.
-
-  Program Definition nd_intersection (xs ys : NDL) : NDL :=
-    nd_filter (fun x => if In_dec x ys then true else false) xs.
-
-  Lemma nd_intersection_in : forall xs ys a, nd_In a (nd_intersection xs ys) <->
-                                             nd_In a xs /\ nd_In a ys.
-  Proof.
-    intros.
-    cbn.
-    rewrite filter_In.
-    destruct In_dec; try tauto.
-    intuition.
-  Qed.
-
-  Global Instance nd_intersection_proper :
-    Proper (equiv ==> equiv ==> equiv) nd_intersection.
-  Proof.
-    simpl.
-    intros xs xs' Heqx ys ys' Heqy.
-    intro x.
-    repeat rewrite nd_intersection_in.
-    rewrite Heqx, Heqy.
-    reflexivity.
-  Qed.
-
-  Lemma nd_intersection_comm :
-    forall xs ys, nd_intersection xs ys == nd_intersection ys xs.
-  Proof.
-    intros.
-    intro x.
-    repeat rewrite nd_intersection_in.
-    tauto.
-  Qed.
-
-  Lemma nd_intersection_included :
-    forall xs ys, nd_included xs ys ->
-                  nd_intersection xs ys == xs.
-  Proof.
-    intros.
-    intro x.
-    rewrite nd_intersection_in.
-    specialize (H x).
-    intuition.
-  Qed.
-  
-  Program Definition nd_diff (xs ys : NDL) : NDL :=
-    nd_filter (fun x => if In_dec x ys then false else true) xs.
-
-  Lemma nd_diff_in : forall xs ys a, nd_In a (nd_diff xs ys) <->
-                                             nd_In a xs /\ ~nd_In a ys.
-  Proof.
-    intros.
-    cbn.
-    rewrite filter_In.
-    destruct In_dec; try tauto.
-    intuition.
-  Qed.
-
-  Global Instance nd_diff_proper :
-    Proper (equiv ==> equiv ==> equiv) nd_diff.
-  Proof.
-    simpl.
-    intros xs xs' Heqx ys ys' Heqy.
-    intro x.
-    repeat rewrite nd_diff_in.
-    rewrite Heqx, Heqy.
-    reflexivity.
-  Qed.
-
-  Lemma nd_diff_count : forall xs ys,
-      count (nd_diff xs ys) = count xs - count (nd_intersection xs ys).
-  Proof.
-    intros.
-    unfold count.
-    destruct xs as [xs xs_prf].
-    cbn.
-    clear xs_prf.
-    induction xs as [| x xs]; auto.
-    simpl filter.
-    destruct In_dec; auto.
-    simpl length.
-    rewrite IHxs.
-    rewrite Nat.sub_succ_l; auto.
-    apply filter_length.
-  Qed.
-  
-  
-  Program Definition nd_union (xs ys : NDL) : NDL :=
-    {| elems :=
-         nd_diff xs ys ++ ys
-    |}.
-  Next Obligation.
-    apply nodup_app; auto.
-    intro x.
-    rewrite filter_In.
-    destruct In_dec; try tauto.
-    now destruct 1. 
-  Qed.
-
-  Lemma nd_union_in : forall xs ys a, nd_In a (nd_union xs ys) <-> nd_In a xs \/ nd_In a ys.
-  Proof.
-    intros.
-    unfold nd_union.
-    simpl.
-    unfold nd_In. simpl.
-    rewrite in_app_iff, filter_In.
-    intuition.
-    destruct In_dec; tauto.
-  Qed.
-  
-  Global Instance nd_union_proper :
-    Proper (equiv ==> equiv ==> equiv) nd_union.
-  Proof.
-    simpl.
-    intros xs xs' Heqx ys ys' Heqy.
-    intro x.
-    repeat rewrite nd_union_in.
-    rewrite Heqx, Heqy.
-    reflexivity.
-  Qed.
-
-  Lemma nd_union_count: forall xs ys,
-      count (nd_union xs ys) =
-      count xs + count ys - count (nd_intersection xs ys).
-  Proof.
-    intros.
-    replace (count (nd_union xs ys)) with (count (nd_diff xs ys) + count ys).
-    - rewrite nd_diff_count.
-      rewrite Nat.add_sub_swap; auto.
-      apply filter_length.
-    - unfold nd_union, count.
-      simpl.
-      rewrite app_length.
-      reflexivity.
-  Qed.
-
-  Program Definition empty : NDL := {| elems := nil |}.
-  Next Obligation.
-    constructor.
-  Qed.
-  
-  Lemma empty_in : forall x, ~In x empty.
-  Proof.
-    intros.
-    now simpl.
-  Qed.
-
-  Lemma count_0_empty : forall xs, count xs = 0 <-> xs == empty.
-  Proof.
-    intros.
-    split; intro H.
-    - destruct xs as [xs Hnd].
-      unfold count in *.
-      destruct xs as [| x xs]; simpl in *; try discriminate.
-      unfold same_set, nd_In. simpl.
-      tauto.
-    - rewrite H.
-      reflexivity.
-  Qed.
-
-  Fixpoint nd_union_many (xss : list NDL) : NDL :=
-    match xss with
-    | nil => empty
-    | xs :: xss' => nd_union xs (nd_union_many xss')
-    end.
-
-  Lemma nd_union_many_in :
-    forall xss a, nd_In a (nd_union_many xss) <-> (exists xs, In xs xss /\ nd_In a xs).
-  Proof.
-    induction xss as [| xs xss].
-    - simpl.
-      intros.
+Lemma pigeon : forall xs n,
+    n < length xs -> (forall x, In x xs -> x < n) -> ~NoDup xs.
+Proof.
+  intro xs.
+  remember (length xs) as len.
+  revert xs Heqlen.
+  induction len as [| len].
+  - intros xs Heq n Hlt Hbound.
+    inversion Hlt.
+  - intros xs Heq n Hlt Hbound.
+    destruct n as [| n].
+    + destruct xs; inversion Heq.
+      specialize (Hbound n).
+      simpl in Hbound.
       intuition.
-      now destruct H.
-    - intro a.
+    + destruct (In_dec n xs) as [HIn | Hnin].
+      * apply in_split in HIn.
+        destruct HIn as (xl & xr & Hxs).
+        subst.
+        intro HND.
+        apply NoDup_remove in HND.
+        destruct HND as [HND Hnin].
+        contradict HND.
+        apply IHlen with (n := n); try omega.
+        -- rewrite app_length in *.
+           simpl in *.
+           omega.
+        -- intros x HIn.
+           specialize (Hbound x).
+           rewrite in_app_iff in *. simpl in *.
+           cut_hyp Hbound; try tauto.
+           cut (x <> n); try omega.
+           intro.
+           now subst.
+      * inversion 1 as [|?x ?xs' Hninx HND]; subst; simpl in *; try discriminate.
+        contradict HND.
+        apply IHlen with (n := n); try omega.
+        intros y HIny.
+        specialize (Hbound y).
+        cut_hyp Hbound; auto.
+        cut (y <> n); try omega.
+        intro.
+        subst.
+        tauto.
+Qed.
+    
+Lemma inv_pigeon : forall xs,
+    NoDup xs -> (forall x, In x xs -> x < length xs) ->
+    forall x, x < length xs -> In x xs.
+Proof.
+  intro xs.
+  remember (length xs) as len.
+  revert xs Heqlen.
+  induction len.
+  - intros.
+    omega.
+  - intros xs Hlen HND Hbound x Hlt.
+    assert (In len xs) as HIn. {
+      destruct (In_dec len xs); auto.
+      contradict HND.
+      apply pigeon with (n := len); try omega.
+      intros x' HIn.
+      specialize (Hbound x' HIn).
+      cut (x' <> len); try omega.
+      intro.
+      now subst.
+    }
+    inversion Hlt; subst; auto.
+    apply in_split in HIn.
+    destruct HIn as (xl & xr & Hxs).
+    subst.
+    specialize (IHlen (xl ++ xr)).
+    rewrite app_length in *.
+    simpl in *.
+    cut_hyp IHlen; try omega.
+    apply NoDup_remove in HND.
+    cut_hyp IHlen; try tauto.
+    cut_hyp IHlen.
+    + intros y HIny.
+      specialize (Hbound y).
+      rewrite in_app_iff in *.
+      simpl in *.
+      cut (y <> len).
+      * intros.
+        cut_hyp Hbound; try tauto.
+        omega.
+      * intro.
+        subst.
+        tauto.
+    + specialize (IHlen x).
+      rewrite in_app_iff in *.
       simpl.
-      rewrite nd_union_in.
-      rewrite IHxss.
-      split.
-      + intros [HIn | [xs' Hxs']].
-        * exists xs.
-          tauto.
-        * exists xs'.
-          tauto.
-      + intros [xs' Hxs'].
-        destruct Hxs' as [[Heq | HIn] HIna].
-        * subst.
-          auto.
-        * eauto.
-  Qed.
+      destruct IHlen; auto.
+Qed.
 
-  
 
-End NDL.
-Arguments empty {A}.
+                        
+Fixpoint maximum (xs : list nat) : nat :=
+  match xs with
+  | nil => 0
+  | x :: xs' => Nat.max x (maximum xs')
+  end.
+
+Lemma maximum_spec : forall xs x, In x xs -> x <= maximum xs.
+Proof.
+  induction xs as [| x xs]; intro y; simpl; try tauto.
+  destruct 1.
+  - subst.
+    apply Nat.le_max_l.
+  - apply le_trans with (maximum xs); auto.
+    apply Nat.le_max_r.
+Qed.
+
+Lemma map_nth' : forall {A B} (f : A -> B) xs n da db,
+    n < length xs ->
+    nth n (map f xs) da = f (nth n xs db).
+Proof.
+  intros until db.
+  revert xs.
+  induction n; intros xs Hlt.
+  - destruct xs.
+    + inversion Hlt.
+    + reflexivity.
+  - destruct xs.
+    + inversion Hlt.
+    + simpl.
+      rewrite IHn; auto.
+      simpl in Hlt.
+      omega.
+Qed.
+
+Lemma list_elem_eq {A} : forall xs ys (d : A),
+    length xs = length ys ->
+    (forall i, i < length xs -> nth i xs d = nth i ys d) ->
+    xs = ys.
+Proof.
+  induction xs.
+  - destruct ys; simpl in *; try discriminate.
+    reflexivity.
+  - intros ys d Hlen Heq.
+    destruct ys as [|b ys]; simpl in Hlen; try discriminate.
+    specialize (IHxs ys d).
+    cut_hyp IHxs; auto.
+    replace a with b.
+    + rewrite IHxs; auto.
+      intros i Hi.
+      specialize (Heq (S i)).
+      simpl in Heq.
+      apply Heq.
+      omega.
+    + specialize (Heq 0).
+      simpl in Heq.
+      rewrite Heq; auto.
+      omega.
+Qed.
+              
