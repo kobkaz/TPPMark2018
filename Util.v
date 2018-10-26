@@ -1,5 +1,6 @@
 Require Import List.
 Require Import Arith Omega.
+Require Import Wf_nat.
 
 
 Set Implicit Arguments.
@@ -24,7 +25,7 @@ Section ListUtil.
     destruct IHxs; auto.
     destruct (eq_dec a x); tauto.
   Defined.
-             
+
   Definition NoDup_dec : forall xs : list A, {NoDup xs} + {~NoDup xs}.
   induction xs as [| x xs].
   - left. apply NoDup_nil.
@@ -44,7 +45,7 @@ Section ListUtil.
     | nil => nil
     | x :: xs' => f i x :: map_index_rec f xs' (S i)
     end.
-  
+
   Definition map_index (f : nat -> A -> B) (xs : list A) : list B :=
     map_index_rec f xs 0.
 
@@ -70,7 +71,7 @@ Section ListUtil.
       + simpl.
         reflexivity.
   Qed.
-      
+
   Lemma map_index_length : forall f xs, length (map_index f xs) = length xs.
   Proof.
     intros f xs.
@@ -83,7 +84,7 @@ Section ListUtil.
       rewrite IHxs.
       reflexivity.
   Qed.
-  
+
   Lemma map_index_nth : forall f xs n db da,
       n < length xs -> nth n (map_index f xs) db = f n (nth n xs da).
   Proof.
@@ -206,52 +207,74 @@ Proof.
   ring.
 Qed.
 
+Lemma list_length_ind {A} :
+  forall
+    (P : list A -> Prop)
+    (H : forall (l : nat) (IH : forall xs, length xs < l -> P xs),
+        forall xs, length xs = l -> P xs),
+  forall xs, P xs.
+Proof.
+  intros P H.
+  intro xs.
+  remember (length xs) as l.
+  revert xs Heql.
+  induction l using lt_wf_ind.
+  intros xs Hl.
+  specialize (H l).
+  apply H; auto.
+  intros l' Hlt.
+  apply (H0 (length l')); auto.
+Qed.
+
+
+
 Lemma pigeon : forall xs n,
     n < length xs -> (forall x, In x xs -> x < n) -> ~NoDup xs.
 Proof.
-  intro xs.
-  remember (length xs) as len.
-  revert xs Heqlen.
-  induction len as [| len].
-  - intros xs Heq n Hlt Hbound.
-    inversion Hlt.
-  - intros xs Heq n Hlt Hbound.
-    destruct n as [| n].
-    + destruct xs; inversion Heq.
+  induction xs using list_length_ind.
+  intros n Hlt Hbound.
+  destruct l as [| l].
+  - destruct xs; simpl in *; omega.
+  - destruct n as [| n].
+    + destruct xs; try discriminate.
       specialize (Hbound n).
       simpl in Hbound.
       intuition.
-    + destruct (In_dec n xs) as [HIn | Hnin].
-      * apply in_split in HIn.
-        destruct HIn as (xl & xr & Hxs).
-        subst.
-        intro HND.
+    + destruct (In_dec n xs) as [HIn | HnIn].
+      * intro HND.
+        apply in_split in HIn.
+        destruct HIn as (xl & xr & Heqxs). subst.
         apply NoDup_remove in HND.
-        destruct HND as [HND Hnin].
-        contradict HND.
-        apply IHlen with (n := n); try omega.
-        -- rewrite app_length in *.
-           simpl in *.
-           omega.
-        -- intros x HIn.
-           specialize (Hbound x).
-           rewrite in_app_iff in *. simpl in *.
-           cut_hyp Hbound; try tauto.
-           cut (x <> n); try omega.
-           intro.
-           now subst.
-      * inversion 1 as [|?x ?xs' Hninx HND]; subst; simpl in *; try discriminate.
-        contradict HND.
-        apply IHlen with (n := n); try omega.
+        specialize (IH (xl ++ xr)).
+        rewrite app_length in *.
+        simpl in *.
+        cut_hyp IH; try omega.
+        specialize (IH n).
+        cut_hyp IH; try omega.
+        cut_hyp IH; try tauto.
+        intros x HIn.
+        specialize (Hbound x).
+        rewrite in_app_iff in *.
+        simpl in *.
+        cut_hyp Hbound; try tauto.
+        cut (x <> n); try omega.
+        intro.
+        now subst.
+      * inversion 1 as [|x xs' HnIn' HND]; subst; try discriminate.
+        simpl in *.
+        specialize (IH xs').
+        cut_hyp IH; try omega.
+        specialize (IH n).
+        cut_hyp IH; try omega.
+        cut_hyp IH; try tauto.
         intros y HIny.
         specialize (Hbound y).
-        cut_hyp Hbound; auto.
+        intuition.
         cut (y <> n); try omega.
         intro.
-        subst.
-        tauto.
+        now subst.
 Qed.
-    
+
 Lemma inv_pigeon : forall xs,
     NoDup xs -> (forall x, In x xs -> x < length xs) ->
     forall x, x < length xs -> In x xs.
@@ -302,7 +325,7 @@ Proof.
 Qed.
 
 
-                        
+
 Fixpoint maximum (xs : list nat) : nat :=
   match xs with
   | nil => 0
@@ -361,7 +384,7 @@ Proof.
       rewrite Heq; auto.
       omega.
 Qed.
-              
+
 Lemma sub_sub_add : forall x y z, z <= y -> (x - (y - z)) = x + z - y.
 Proof.
   intros.
