@@ -362,3 +362,8 @@ Proof.
       omega.
 Qed.
               
+Lemma sub_sub_add : forall x y z, z <= y -> (x - (y - z)) = x + z - y.
+Proof.
+  intros.
+  omega.
+Qed.

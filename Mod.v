@@ -2,11 +2,6 @@ Require Import Arith Nat Omega.
 Require Import SetoidClass.
 Set Implicit Arguments.
 
-Lemma sub_sub_add : forall x y z, z <= y -> (x - (y - z)) = x + z - y.
-Proof.
-  intros.
-  omega.
-Qed.
 
 Ltac destruct_divmod x y Hypos d m :=
   let Hmlt := fresh "H" m "lt" in
@@ -16,6 +11,7 @@ Ltac destruct_divmod x y Hypos d m :=
   assert (m < y) as Hmlt;
   [ unfold m; apply (@Nat.mod_upper_bound x y Hypos) |
     clearbody d; clearbody m].
+
 Ltac destruct_add_mod y H :=
   match goal with
   | |- ?x =>
@@ -71,6 +67,7 @@ Qed.
 
 Inductive mod_eq : nat -> nat -> nat -> Prop :=
 | mod_eq_intro : forall z x y, x mod z = y mod z -> mod_eq z x y.
+
 Lemma mod_eq_iff : forall z x y,
     mod_eq z x y <-> x mod z = y mod z.
 Proof.
@@ -92,7 +89,8 @@ Proof.
   congruence.
 Qed.
 
-Notation "[ x ~= y ] / z" := (@mod_eq z x y) (at level 100, no associativity).
+Notation  "[ z ; x ~= y ]" := (@mod_eq z x y) (at level 10, no associativity).
+
 Instance add_proper_mod z : Proper (mod_eq z ==> mod_eq z ==> mod_eq z) Nat.add.
 Proof.
   intros x x' Hx y y' Hy.
@@ -102,7 +100,7 @@ Proof.
   rewrite (Nat.add_mod x' y'); auto.
 Qed.
 
-Lemma mul_modeq_0_r : forall x k, mod_eq k (x * k) 0.
+Lemma mul_mod_0_r : forall k x, mod_eq k (x * k) 0.
 Proof.
   intros.
   constructor.
@@ -112,18 +110,19 @@ Proof.
   simpl.
   omega.
 Qed.
-Lemma mul_modeq_0_l : forall x k, mod_eq k (k * x) 0.
+
+Lemma mul_mod_0_l : forall k x, mod_eq k (k * x) 0.
 Proof.
   intros.
   rewrite Nat.mul_comm.
-  apply mul_modeq_0_r.
+  apply mul_mod_0_r.
 Qed.
 
-Lemma modeq_same_0 : forall k, mod_eq k k 0.
+Lemma mod_same_0 : forall k, mod_eq k k 0.
 Proof.
   intro.
   rewrite <- (Nat.mul_1_r k) at 2.
-  apply mul_modeq_0_l.
+  apply mul_mod_0_l.
 Qed.
 
 Instance add_proper_mul z : Proper (mod_eq z ==> mod_eq z ==> mod_eq z) Nat.mul.
@@ -135,146 +134,137 @@ Proof.
   rewrite (Nat.mul_mod x' y'); auto.
 Qed.
 
-Lemma sub_mod_modeq_0 : forall x k, mod_eq k (x - x mod k) 0.
+Lemma mod_add_self : forall x k, k <> 0 -> mod_eq k x (x + k).
 Proof.
-  constructor.
-  destruct k; auto.
-  assert (S k <> 0) as Hnz; auto.
-  destruct_divmod x (S k) Hnz m p.
-  simpl_mod (S k) Hnz.
-  rewrite (Nat.mod_small p); auto.
-  rewrite Nat.add_sub.
-  simpl_mod (S k) Hnz.
-  simpl.
-  omega.
+  intros x k Hk.
+  rewrite mod_same_0 at 2.
+  rewrite Nat.add_0_r.
+  reflexivity.
 Qed.
 
-  
-Lemma mod_sub_exact : forall x y, y <= x ->  (x - y) mod y = x mod y.
+Lemma mod_sub_self : forall x k, k <> 0 -> k <= x -> mod_eq k x (x - k).
 Proof.
-  intros.
-  destruct y; auto.
-  set (S y) as Sy in *.
-  assert (Sy <> 0) as HSy; try now unfold Sy.
-  clearbody Sy.
-  revert H.
-  destruct_divmod x Sy HSy m p.
-  destruct m; simpl.
-  - rewrite Nat.mul_0_r.
-    simpl.
-    intuition.
-  - intro H.
-    rewrite Nat.add_sub_swap.
-    + rewrite <- (Nat.mul_1_r Sy) at 2.
-      rewrite <- Nat.mul_sub_distr_l.
-      simpl.
-      rewrite Nat.sub_0_r.
-      simpl_mod Sy HSy.
-      reflexivity.
-    + rewrite Nat.mul_succ_r.
-      apply le_plus_r.
-Qed.
-
-Lemma mod_add_inj : forall z x y y', mod_eq z (x + y) (x + y') -> mod_eq z y y'.
-Proof.
-  intro z.
-  destruct z; auto. {
-    intros.
-    rewrite mod_eq_iff.
+  intros x k Hk.
+  destruct_divmod x k Hk m p.
+  intro Hle.
+  destruct m; try omega.
+  replace (k * S m + p - k) with (k * m + p).
+  - repeat rewrite mul_mod_0_l.
     reflexivity.
-  }
-  set (S z) as Sz in *.
-  assert (Sz <> 0) as HSz; try now unfold Sz.
-  clearbody Sz.
+  - clear.
+    rewrite Nat.mul_succ_r.
+    set (k * m) as x.
+    omega.
+Qed.
 
-  cut (forall x y y', y < y' -> mod_eq Sz (x + y) (x + y') -> mod_eq Sz y y').
-  - intro Hr.
-    intros.
-    decompose sum (Nat.lt_total y y').
-    + apply Hr with (x := x); auto.
-    + subst.
-      reflexivity.
-    + symmetry.
-      apply Hr with (x := x); auto.
-      symmetry.
-      assumption.
-  - intros until y'.
-    intros Hlt Heqm.
+Lemma mod_add_unit_unique : forall k a b,
+    k <> 0 ->
+    mod_eq k (a + b) a -> mod_eq k b 0.
+Proof.
+  intros k a b Hk.
+  destruct_divmod a k Hk n p.
+  destruct_divmod b k Hk m q.
+  rewrite mul_mod_0_l.
+  rewrite mul_mod_0_l.
+  simpl.
+  simpl.
+  destruct (le_gt_dec k (p + q)) as [Hle | Hgt].
+  - rewrite (mod_sub_self Hk Hle).
+    repeat rewrite mod_eq_iff.
+    rewrite (Nat.mod_small p); auto.
+    rewrite (Nat.mod_small q); auto.
+    rewrite (Nat.mod_small (p + q - k)); omega.
+  - repeat rewrite mod_eq_iff.
+    rewrite (Nat.mod_small p); auto.
+    rewrite (Nat.mod_small q); auto.
+    rewrite (Nat.mod_small 0); try omega.
+    rewrite (Nat.mod_small (p + q)); omega.
+Qed.
+
+Lemma mod_sub_unit_unique : forall k a b,
+    k <> 0 ->
+    b <= a ->
+    mod_eq k (a - b) a -> mod_eq k b 0.
+Proof.
+  intros k a b Hk.
+  destruct_divmod b k Hk m q.
+  rewrite <- (Nat.add_0_l (a - _)) at 1.
+  rewrite <- (mul_mod_0_l k (S m)).
+  intro Hle.
+  replace (k * (S m) + (a - (k * m + q))) with (a + (k - q)).
+  - intro H.
+    apply mod_add_unit_unique in H; auto.
+    repeat rewrite (mul_mod_0_l); auto.
+    simpl.
+    rewrite mod_eq_iff in *.
+    rewrite (Nat.mod_small q); auto.
+    rewrite (Nat.mod_small 0) in *; try omega.
+    destruct q; auto.
+    rewrite Nat.mod_small in H; omega.
+  - rewrite Nat.add_sub_assoc; try omega.
+    rewrite Nat.add_sub_assoc; try omega.
+    rewrite Nat.mul_succ_r.
+    omega.
+Qed.
+
+Lemma mod_add_inj : forall k x y y',
+    k <> 0 ->
+    mod_eq k (x + y) (x + y') -> mod_eq k y y'.
+Proof.
+  assert (forall k x y y',
+             k <> 0 -> y <= y' ->
+             mod_eq k (x + y) (x + y') -> mod_eq k y y') as Hhelper. {
+    intros until y'.
+    intros Hk Hle.
     set (y' - y) as w.
     replace y' with (y + w) in *; try omega.
-    rewrite mod_eq_iff in *.
-    revert Heqm.
     rewrite Nat.add_assoc.
-    destruct_divmod w Sz HSz m p.
-    simpl_mod Sz HSz.
     intro H.
-    replace p with 0; auto.
-    revert H.
-    destruct_divmod (x + y) Sz HSz n q.
-    simpl_mod Sz HSz.
-    destruct (le_gt_dec Sz (q + p)).
-    + intro Heq.
-      rewrite <- (@mod_sub_exact (q + p)) in Heq; auto.
-      rewrite (Nat.mod_small q) in Heq; auto.
-      rewrite Nat.mod_small in Heq; omega.
-    + repeat rewrite Nat.mod_small; auto.
-      intuition.
-Qed.
-
-Lemma mod_sub : forall x y k,
-    k <> 0 ->
-    y <= x ->
-    mod_eq k (x - y) (x + (k - y mod k)).
-Proof.
-  intros x y k Hk.
-  set (x - y) as w.
-  intro H.
-  replace x with (y + w); try omega.
-  destruct_divmod w k Hk m p.
-  rewrite mul_modeq_0_l.
-  simpl.
-  replace (y + p + (k - y mod k)) with (p + k + (y - y mod k)).
-  - rewrite modeq_same_0 at 2.
-    rewrite sub_mod_modeq_0.
-    repeat rewrite Nat.add_0_r.
+    symmetry in H.
+    apply mod_add_unit_unique in H; auto.
+    rewrite H.
+    rewrite Nat.add_0_r.
     reflexivity.
-  - repeat rewrite Nat.add_sub_assoc; try omega.
-    + set (Nat.mod_upper_bound y k Hk).
-      omega.
-    + now apply Nat.mod_le.
+  }
+
+  intros k x y y' Hk.
+  destruct (Nat.le_ge_cases y y') as [Hle | Hle]; eauto.
+  specialize (Hhelper k x y' y Hk Hle).
+  intro H.
+  symmetry.
+  apply Hhelper.
+  now symmetry.
 Qed.
 
-Lemma mod_sub_inj : forall x y y' k,
+Lemma mod_sub_inj : forall k x y y',
     k <> 0 ->
     y <= x -> y' <= x ->
     mod_eq k (x - y) (x - y') -> mod_eq k y y'.
 Proof.
-  intros until k.
-  intros Hk Hy Hy'.
-  rewrite (@mod_sub x y k); auto.
-  rewrite (@mod_sub x y' k); auto.
-  intro H.
-  apply mod_add_inj in H.
-  rewrite mod_eq_iff in *.
-  destruct (Nat.eq_dec (y mod k) 0) as [Heq | Hneq].
-  - rewrite Heq in *.
-    rewrite Nat.sub_0_r, Nat.mod_same in H; auto.
-    destruct (Nat.eq_dec (y' mod k) 0); auto.
-    rewrite Nat.mod_small in H; try omega.
-    cut (k <= y' mod k); try omega. 
-    cut (y' mod k < k); try omega.
-    now apply Nat.mod_upper_bound.
-  - destruct (Nat.eq_dec (y' mod k) 0) as [Heq' | Hneq'].
-    ++ rewrite Heq' in *.
-       rewrite Nat.sub_0_r, Nat.mod_same in H; auto.
-       rewrite Nat.mod_small in H; try omega.
-       cut (k <= y mod k); try omega.
-       cut (y mod k < k); try omega.
-       now apply Nat.mod_upper_bound.
-    ++ rewrite (Nat.mod_small (k - y mod k)) in H; try omega.
-       rewrite (Nat.mod_small (k - y' mod k)) in H; try omega.
-       assert (y mod k < k); eauto using Nat.mod_upper_bound.
-       assert (y' mod k < k); eauto using Nat.mod_upper_bound.
-       omega.
-Qed.
+    assert (forall k x y y',
+               k <> 0 ->
+               y' <= x ->
+               y <= y' ->
+             mod_eq k (x - y) (x - y') -> mod_eq k y y') as Hhelper. {
+    intros until y'.
+    intros Hk Hlex Hley.
+    set (y' - y) as w.
+    replace y' with (y + w) in *; try omega.
+    rewrite Nat.sub_add_distr.
+    intro H.
+    symmetry in H.
+    apply mod_sub_unit_unique in H; try omega.
+    rewrite H.
+    rewrite Nat.add_0_r.
+    reflexivity.
+  }
 
+    intros until y'.
+    intros Hk Hley Hley'.
+    destruct (Nat.le_ge_cases y y') as [Hle | Hle]; eauto.
+    specialize (Hhelper k x y' y Hk Hley Hle).
+    intro H.
+    symmetry.
+    apply Hhelper.
+    now symmetry.
+Qed.
