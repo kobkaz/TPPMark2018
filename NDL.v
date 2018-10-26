@@ -22,7 +22,7 @@ Section NDL.
     intros.
     reflexivity.
   Qed.
-  
+
   Definition same_set (xs ys : NDL) : Prop := forall x,
       nd_In x xs <-> nd_In x ys.
 
@@ -52,7 +52,7 @@ Section NDL.
     rewrite Heqxs'.
     reflexivity.
   Qed.
-  
+
   Definition nd_included (xs ys : NDL) : Prop :=
     forall x, nd_In x xs -> nd_In x ys.
 
@@ -70,7 +70,7 @@ Section NDL.
       rewrite <- Heqxs, <- Heqys in H.
       auto.
   Qed.
-  
+
   Definition NDL_iff (P : A -> Prop) (xs : NDL) := forall x, nd_In x xs <-> P x.
 
   Definition count (xs : NDL) : nat := length (elems xs).
@@ -178,7 +178,7 @@ Section NDL.
     rewrite Heqv.
     reflexivity.
   Qed.
-    
+
   Lemma nodup_filter : forall f (xs : list A), NoDup xs -> NoDup (filter f xs).
   Proof.
     intros f xs H.
@@ -264,7 +264,7 @@ Section NDL.
     specialize (H x).
     intuition.
   Qed.
-  
+
   Program Definition nd_diff (xs ys : NDL) : NDL :=
     nd_filter (fun x => if In_dec x ys then false else true) xs.
 
@@ -305,8 +305,8 @@ Section NDL.
     rewrite Nat.sub_succ_l; auto.
     apply filter_length.
   Qed.
-  
-  
+
+
   Program Definition nd_union (xs ys : NDL) : NDL :=
     {| elems :=
          nd_diff xs ys ++ ys
@@ -316,7 +316,7 @@ Section NDL.
     intro x.
     rewrite filter_In.
     destruct In_dec; try tauto.
-    now destruct 1. 
+    now destruct 1.
   Qed.
 
   Lemma nd_union_in : forall xs ys a, nd_In a (nd_union xs ys) <-> nd_In a xs \/ nd_In a ys.
@@ -329,7 +329,7 @@ Section NDL.
     intuition.
     destruct In_dec; tauto.
   Qed.
-  
+
   Global Instance nd_union_proper :
     Proper (equiv ==> equiv ==> equiv) nd_union.
   Proof.
@@ -360,7 +360,7 @@ Section NDL.
   Next Obligation.
     constructor.
   Qed.
-  
+
   Lemma empty_in : forall x, ~In x empty.
   Proof.
     intros.
@@ -411,7 +411,7 @@ Section NDL.
         * eauto.
   Qed.
 
-  
+
 
 End NDL.
 Arguments empty {A}.

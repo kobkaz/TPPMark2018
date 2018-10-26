@@ -34,7 +34,7 @@ Proof.
     simpl.
     auto.
   }
-  
+
   rewrite NoDup_nth with (d:=x) .
   rewrite map_index_length, <- Heqlen.
 
@@ -52,14 +52,14 @@ Proof.
     + apply f_equal with (f := (fun x => x mod len)) in H.
       revert H.
       simpl_mod len Hlen.
-      repeat (rewrite Nat.mod_small; [| assumption]).      
+      repeat (rewrite Nat.mod_small; [| assumption]).
       auto.
   - intros m n.
     destruct_divmod m len Hlen s p. clear m.
     destruct_divmod n len Hlen t q. clear n.
-    
+
     simpl_mod len Hlen.
-    
+
     rewrite (Nat.mod_small _ _ Hplt).
     rewrite (Nat.mod_small _ _ Hqlt).
     specialize (H p q Hplt Hqlt).
@@ -86,7 +86,7 @@ Definition is_valid' xs : {Valid' xs} + {~Valid' xs}.
     tauto.
   - unfold Valid'.
     destruct
-      (NoDup_dec 
+      (NoDup_dec
          (map_index (fun i x => (i + x) mod length (x :: xs)) (x :: xs))).
     + left.
       split; auto.
@@ -198,7 +198,7 @@ Qed.
 
 Lemma Across_mod_union :
   forall xs n,
-    xs <> nil -> 
+    xs <> nil ->
     same_set
       (nd_union_many (map (Across_ndl_mod xs n) (upto_list (length xs))))
       (Across_ndl xs n).
@@ -353,7 +353,7 @@ Defined.
 
 
 Lemma Across_ndl_mod_same :
-  forall xs n p (Hnn : xs <> nil), 
+  forall xs n p (Hnn : xs <> nil),
     p < length xs -> n >= p + nth p xs 0 ->
     Across_ndl_mod xs n p == Across_ndl_mod' Hnn n p.
 Proof.
@@ -464,7 +464,7 @@ Proof.
     simpl.
     auto.
   }
- 
+
   rewrite <- nd_count_length.
   rewrite nd_diff_count.
   rewrite nd_intersection_comm.
@@ -586,7 +586,7 @@ Proof.
   }
 
 
-  
+
   transitivity
     (nat_sum
        (map (fun p =>
